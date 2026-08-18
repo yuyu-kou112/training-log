@@ -1,6 +1,12 @@
 // Minimal offline app-shell cache for the training log PWA.
 // Data itself lives in localStorage on the device, not in this cache.
-const CACHE_NAME = "training-log-shell-v1";
+//
+// Strategy: network-first. This app is actively updated, so every load
+// should show the latest deployed version when online; the cache is only
+// a fallback for when the device is offline. (A cache-first strategy here
+// previously caused updates to silently never show on devices that had
+// the app added to the home screen.)
+const CACHE_NAME = "training-log-shell-v2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -29,9 +35,12 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).catch(() => cached);
-    })
+    fetch(event.request)
+      .then((response) => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
