@@ -27,22 +27,8 @@
     --series-2:       #eb6834; /* reps */
     --danger:         #d03b3b;
   }
-  @media (prefers-color-scheme: dark) {
-    .viz-root {
-      color-scheme: dark;
-      --surface-1:      #1a1a19;
-      --page-plane:     #0d0d0d;
-      --text-primary:   #ffffff;
-      --text-secondary: #c3c2b7;
-      --text-muted:     #898781;
-      --gridline:       #2c2c2a;
-      --baseline:       #383835;
-      --border:         rgba(255,255,255,0.10);
-      --series-1:       #3987e5;
-      --series-2:       #d95926;
-      --danger:         #e66767;
-    }
-  }
+  /* Dark mode intentionally not auto-applied: the app always uses the light
+     palette above so phones and PCs look the same regardless of OS theme. */
 
   * { box-sizing: border-box; }
   html, body {
@@ -58,6 +44,12 @@
     gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
   }
   header.top h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  .title-row { display: flex; align-items: baseline; gap: 6px; }
+  .version-badge {
+    font-size: 11px; font-weight: 600; color: var(--text-muted);
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 999px; padding: 1px 8px;
+  }
   .data-actions { display: flex; gap: 6px; }
   .icon-btn {
     background: var(--surface-1); color: var(--text-secondary);
@@ -207,7 +199,10 @@
 <body>
 <div class="viz-root" id="app">
   <header class="top">
-    <h1>トレーニング記録表</h1>
+    <div class="title-row">
+      <h1>トレーニング記録表</h1>
+      <span class="version-badge">v1.1</span>
+    </div>
     <div class="data-actions">
       <button class="icon-btn" id="btnExport">バックアップ書き出し</button>
       <button class="icon-btn" id="btnImportTrigger">読み込み</button>
