@@ -185,6 +185,23 @@
   }
   table.log-table th { color: var(--text-muted); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.02em; }
   table.log-table td.num { text-align: right; }
+  table.log-table .row-actions { text-align: right; white-space: nowrap; padding-left: 4px; }
+  .row-action-btn {
+    background: none; border: none; color: var(--text-muted); cursor: pointer;
+    font-size: 15px; padding: 4px 5px; line-height: 1;
+  }
+  .row-action-btn:hover { color: var(--series-1); }
+
+  td.edit-cell { padding: 10px 4px; }
+  .edit-form {
+    display: flex; flex-wrap: wrap; gap: 10px; background: var(--page-plane);
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+  }
+  .edit-field { flex: 1 1 130px; min-width: 110px; }
+  .edit-field .field-label { margin-bottom: 4px; }
+  .edit-btn-row { display: flex; gap: 8px; width: 100%; margin-top: 2px; }
+  .edit-btn-row .primary-btn { width: auto; flex: 1; }
+  .edit-btn-row .icon-btn { flex: 1; }
 
   select.combo {
     font-family: inherit; font-size: 16px; padding: 8px 10px;
@@ -216,7 +233,7 @@
   <header class="top">
     <div class="title-row">
       <h1>トレーニング記録表</h1>
-      <span class="version-badge">v1.2</span>
+      <span class="version-badge">v1.3</span>
     </div>
     <div class="data-actions">
       <button class="icon-btn" id="btnExport">バックアップ書き出し</button>
@@ -308,6 +325,7 @@
   }
 
   var formState = { date: todayStr(), groups: [freshGroup()] };
+  var editingRecordId = null; // id of the record currently shown as an editable row on the history page
 
   // ---------- Local persistence (auto-save on this device) ----------
   var STORAGE_KEY = "trainingLogData_v1";
@@ -375,6 +393,7 @@
 
   // ---------- Navigation ----------
   function showPage(name) {
+    if (name !== "history") editingRecordId = null;
     ["home", "record", "history"].forEach(function (p) {
       document.getElementById("page-" + p).hidden = (p !== name);
     });
@@ -683,6 +702,129 @@
     return seen;
   }
 
+  function renderViewRow(r) {
+    var tr = document.createElement("tr");
+
+    var tdDate = document.createElement("td"); tdDate.textContent = r.date;
+    var tdSet = document.createElement("td"); tdSet.textContent = r.set;
+    var tdWeight = document.createElement("td"); tdWeight.className = "num"; tdWeight.textContent = r.weight;
+    var tdReps = document.createElement("td"); tdReps.className = "num"; tdReps.textContent = r.reps;
+    var tdActions = document.createElement("td"); tdActions.className = "row-actions";
+
+    var editBtn = document.createElement("button");
+    editBtn.className = "row-action-btn"; editBtn.title = "編集"; editBtn.textContent = "✎";
+    editBtn.onclick = function () { editingRecordId = r.id; renderHistory(); };
+
+    var delBtn = document.createElement("button");
+    delBtn.className = "row-action-btn"; delBtn.title = "削除"; delBtn.textContent = "✕";
+    delBtn.onclick = function () {
+      var ok = window.confirm(r.date + "の記録(" + r.weight + "kg × " + r.reps + "回)を削除します。よろしいですか?");
+      if (!ok) return;
+      records = records.filter(function (rec) { return rec.id !== r.id; });
+      saveToStorage();
+      renderHistory();
+    };
+
+    tdActions.appendChild(editBtn);
+    tdActions.appendChild(delBtn);
+    tr.appendChild(tdDate); tr.appendChild(tdSet); tr.appendChild(tdWeight); tr.appendChild(tdReps); tr.appendChild(tdActions);
+    return tr;
+  }
+
+  function renderEditRow(r) {
+    var tr = document.createElement("tr");
+    var td = document.createElement("td");
+    td.colSpan = 5;
+    td.className = "edit-cell";
+
+    var form = document.createElement("div");
+    form.className = "edit-form";
+
+    function field(labelText, inputEl) {
+      var wrap = document.createElement("div");
+      wrap.className = "edit-field";
+      var lab = document.createElement("label");
+      lab.className = "field-label";
+      lab.textContent = labelText;
+      wrap.appendChild(lab);
+      wrap.appendChild(inputEl);
+      return wrap;
+    }
+
+    var dateInput = document.createElement("input");
+    dateInput.type = "date"; dateInput.value = r.date;
+
+    var bpInput = document.createElement("input");
+    bpInput.type = "text"; bpInput.value = r.bodyPart; bpInput.setAttribute("list", "dl-edit-bp");
+    var bpList = document.createElement("datalist");
+    bpList.id = "dl-edit-bp";
+    knownBodyParts().forEach(function (bp) {
+      var opt = document.createElement("option"); opt.value = bp; bpList.appendChild(opt);
+    });
+
+    var exInput = document.createElement("input");
+    exInput.type = "text"; exInput.value = r.exercise; exInput.setAttribute("list", "dl-edit-ex");
+    var exList = document.createElement("datalist");
+    exList.id = "dl-edit-ex";
+    knownExercises(r.bodyPart).forEach(function (name) {
+      var opt = document.createElement("option"); opt.value = name; exList.appendChild(opt);
+    });
+
+    var weightInput = document.createElement("input");
+    weightInput.type = "number"; weightInput.step = "0.5"; weightInput.min = "0"; weightInput.value = r.weight;
+
+    var repsInput = document.createElement("input");
+    repsInput.type = "number"; repsInput.step = "1"; repsInput.min = "0"; repsInput.value = r.reps;
+
+    form.appendChild(field("日付", dateInput));
+    form.appendChild(field("部位", bpInput));
+    form.appendChild(bpList);
+    form.appendChild(field("種目", exInput));
+    form.appendChild(exList);
+    form.appendChild(field("重量(kg)", weightInput));
+    form.appendChild(field("回数", repsInput));
+
+    var btnRow = document.createElement("div");
+    btnRow.className = "edit-btn-row";
+
+    var saveBtn = document.createElement("button");
+    saveBtn.className = "primary-btn"; saveBtn.style.marginTop = "0"; saveBtn.textContent = "保存";
+    saveBtn.onclick = function () {
+      var bp = bpInput.value.trim();
+      var ex = exInput.value.trim();
+      var w = weightInput.value;
+      var reps = repsInput.value;
+      if (!bp || !ex || w === "" || reps === "") {
+        banner("すべての項目を入力してください。", "error");
+        return;
+      }
+      var target = records.find(function (rec) { return rec.id === r.id; });
+      if (target) {
+        target.date = dateInput.value || r.date;
+        target.bodyPart = bp;
+        target.exercise = ex;
+        target.weight = parseFloat(w);
+        target.reps = parseInt(reps, 10);
+      }
+      editingRecordId = null;
+      saveToStorage();
+      banner("記録を更新しました。", "ok");
+      renderHistory();
+    };
+
+    var cancelBtn = document.createElement("button");
+    cancelBtn.className = "icon-btn"; cancelBtn.textContent = "キャンセル";
+    cancelBtn.onclick = function () { editingRecordId = null; renderHistory(); };
+
+    btnRow.appendChild(saveBtn);
+    btnRow.appendChild(cancelBtn);
+    form.appendChild(btnRow);
+
+    td.appendChild(form);
+    tr.appendChild(td);
+    return tr;
+  }
+
   function renderHistory() {
     var el = document.getElementById("historyContent");
     el.innerHTML = "";
@@ -726,14 +868,10 @@
         var table = document.createElement("table");
         table.className = "log-table";
         table.innerHTML =
-          "<thead><tr><th>日付</th><th>セット</th><th class='num'>重量(kg)</th><th class='num'>回数</th></tr></thead>";
+          "<thead><tr><th>日付</th><th>セット</th><th class='num'>重量(kg)</th><th class='num'>回数</th><th></th></tr></thead>";
         var tbody = document.createElement("tbody");
         rows.forEach(function (r) {
-          var tr = document.createElement("tr");
-          tr.innerHTML =
-            "<td>" + r.date + "</td><td>" + r.set + "</td>" +
-            "<td class='num'>" + r.weight + "</td><td class='num'>" + r.reps + "</td>";
-          tbody.appendChild(tr);
+          tbody.appendChild(r.id === editingRecordId ? renderEditRow(r) : renderViewRow(r));
         });
         table.appendChild(tbody);
         tableCard.appendChild(table);
