@@ -177,6 +177,8 @@
   .bp-group-title { font-size: 16px; font-weight: 700; margin: 22px 0 8px; }
   .bp-group-title:first-child { margin-top: 0; }
   .ex-title { font-size: 13.5px; font-weight: 600; color: var(--text-secondary); margin: 12px 0 6px; }
+  .group-title-row { display: flex; align-items: center; gap: 6px; }
+  .group-title-row .row-action-btn { font-size: 13px; }
 
   table.log-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 4px; }
   table.log-table th, table.log-table td {
@@ -233,7 +235,7 @@
   <header class="top">
     <div class="title-row">
       <h1>トレーニング記録表</h1>
-      <span class="version-badge">v1.3</span>
+      <span class="version-badge">v1.4</span>
     </div>
     <div class="data-actions">
       <button class="icon-btn" id="btnExport">バックアップ書き出し</button>
@@ -702,6 +704,36 @@
     return seen;
   }
 
+  function renameBodyPart(oldName) {
+    var newName = window.prompt("部位名を変更します(この部位に含まれるすべての記録に反映されます)", oldName);
+    if (newName === null) return;
+    newName = newName.trim();
+    if (!newName || newName === oldName) return;
+    if (knownBodyParts().indexOf(newName) !== -1) {
+      var ok = window.confirm("「" + newName + "」はすでにある部位名です。統合しますか?");
+      if (!ok) return;
+    }
+    records.forEach(function (r) { if (r.bodyPart === oldName) r.bodyPart = newName; });
+    saveToStorage();
+    banner("部位名を「" + newName + "」に変更しました。", "ok");
+    renderHistory();
+  }
+
+  function renameExercise(bp, oldName) {
+    var newName = window.prompt("種目名を変更します(この種目のすべての記録に反映されます)", oldName);
+    if (newName === null) return;
+    newName = newName.trim();
+    if (!newName || newName === oldName) return;
+    if (knownExercises(bp).indexOf(newName) !== -1) {
+      var ok = window.confirm("「" + newName + "」はすでにある種目名です。統合しますか?");
+      if (!ok) return;
+    }
+    records.forEach(function (r) { if (r.bodyPart === bp && r.exercise === oldName) r.exercise = newName; });
+    saveToStorage();
+    banner("種目名を「" + newName + "」に変更しました。", "ok");
+    renderHistory();
+  }
+
   function renderViewRow(r) {
     var tr = document.createElement("tr");
 
@@ -847,14 +879,26 @@
 
     orderedBodyParts().forEach(function (bp) {
       var bpTitle = document.createElement("div");
-      bpTitle.className = "bp-group-title";
-      bpTitle.textContent = bp;
+      bpTitle.className = "bp-group-title group-title-row";
+      var bpTitleText = document.createElement("span");
+      bpTitleText.textContent = bp;
+      var bpRenameBtn = document.createElement("button");
+      bpRenameBtn.className = "row-action-btn"; bpRenameBtn.title = "部位名を変更"; bpRenameBtn.textContent = "✎";
+      bpRenameBtn.onclick = function () { renameBodyPart(bp); };
+      bpTitle.appendChild(bpTitleText);
+      bpTitle.appendChild(bpRenameBtn);
       tableCard.appendChild(bpTitle);
 
       orderedExercises(bp).forEach(function (exName) {
         var exTitle = document.createElement("div");
-        exTitle.className = "ex-title";
-        exTitle.textContent = exName;
+        exTitle.className = "ex-title group-title-row";
+        var exTitleText = document.createElement("span");
+        exTitleText.textContent = exName;
+        var exRenameBtn = document.createElement("button");
+        exRenameBtn.className = "row-action-btn"; exRenameBtn.title = "種目名を変更"; exRenameBtn.textContent = "✎";
+        exRenameBtn.onclick = function () { renameExercise(bp, exName); };
+        exTitle.appendChild(exTitleText);
+        exTitle.appendChild(exRenameBtn);
         tableCard.appendChild(exTitle);
 
         var rows = records
