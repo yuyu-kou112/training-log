@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
@@ -235,7 +235,7 @@
   <header class="top">
     <div class="title-row">
       <h1>トレーニング記録表</h1>
-      <span class="version-badge">v1.5</span>
+      <span class="version-badge">v1.6</span>
     </div>
     <div class="data-actions">
       <button class="icon-btn" id="btnExport">バックアップ書き出し</button>
@@ -888,13 +888,30 @@
     });
     function comboKey(c) { return c.bp + "||" + c.ex; }
 
-    if (historyTableFilter !== "all" && allCombos.every(function (c) { return comboKey(c) !== historyTableFilter; })) {
-      historyTableFilter = "all"; // selected exercise no longer exists (renamed/deleted) — fall back
+    // historyTableFilter is one of: "all" | "bp:<bodyPart>" | "ex:<bodyPart>||<exercise>"
+    var filterStillValid =
+      historyTableFilter === "all" ||
+      (historyTableFilter.indexOf("bp:") === 0 && orderedBodyParts().indexOf(historyTableFilter.slice(3)) !== -1) ||
+      (historyTableFilter.indexOf("ex:") === 0 && allCombos.some(function (c) { return "ex:" + comboKey(c) === historyTableFilter; }));
+    if (!filterStillValid) historyTableFilter = "all"; // renamed/deleted since — fall back
+
+    function bpVisible(bp) {
+      if (historyTableFilter === "all") return true;
+      if (historyTableFilter === "bp:" + bp) return true;
+      if (historyTableFilter.indexOf("ex:") === 0) {
+        return orderedExercises(bp).some(function (ex) { return historyTableFilter === "ex:" + bp + "||" + ex; });
+      }
+      return false;
+    }
+    function exVisible(bp, ex) {
+      if (historyTableFilter === "all") return true;
+      if (historyTableFilter === "bp:" + bp) return true;
+      return historyTableFilter === "ex:" + bp + "||" + ex;
     }
 
     var filterLabel = document.createElement("label");
     filterLabel.className = "field-label";
-    filterLabel.textContent = "種目で絞り込む";
+    filterLabel.textContent = "部位・種目で絞り込む";
     tableCard.appendChild(filterLabel);
 
     var filterSelect = document.createElement("select");
@@ -902,18 +919,25 @@
     var allOpt = document.createElement("option");
     allOpt.value = "all"; allOpt.textContent = "すべて表示";
     filterSelect.appendChild(allOpt);
-    allCombos.forEach(function (c) {
-      var opt = document.createElement("option");
-      opt.value = comboKey(c);
-      opt.textContent = c.bp + " - " + c.ex;
-      filterSelect.appendChild(opt);
+    orderedBodyParts().forEach(function (bp) {
+      var group = document.createElement("optgroup");
+      group.label = bp;
+      var bpOpt = document.createElement("option");
+      bpOpt.value = "bp:" + bp; bpOpt.textContent = bp + "(すべての種目)";
+      group.appendChild(bpOpt);
+      orderedExercises(bp).forEach(function (exName) {
+        var exOpt = document.createElement("option");
+        exOpt.value = "ex:" + bp + "||" + exName; exOpt.textContent = exName;
+        group.appendChild(exOpt);
+      });
+      filterSelect.appendChild(group);
     });
     filterSelect.value = historyTableFilter;
     filterSelect.onchange = function () { historyTableFilter = filterSelect.value; renderHistory(); };
     tableCard.appendChild(filterSelect);
 
     orderedBodyParts().forEach(function (bp) {
-      if (historyTableFilter !== "all" && orderedExercises(bp).every(function (ex) { return comboKey({ bp: bp, ex: ex }) !== historyTableFilter; })) return;
+      if (!bpVisible(bp)) return;
       var bpTitle = document.createElement("div");
       bpTitle.className = "bp-group-title group-title-row";
       var bpTitleText = document.createElement("span");
@@ -926,7 +950,7 @@
       tableCard.appendChild(bpTitle);
 
       orderedExercises(bp).forEach(function (exName) {
-        if (historyTableFilter !== "all" && historyTableFilter !== comboKey({ bp: bp, ex: exName })) return;
+        if (!exVisible(bp, exName)) return;
 
         var exTitle = document.createElement("div");
         exTitle.className = "ex-title group-title-row";
@@ -1020,11 +1044,15 @@
     el.appendChild(graphCard);
 
     if (combos.length > 0) {
-      // If the log table above is narrowed to one exercise, default the graph to match it.
+      // If the log table above is narrowed to a body part or exercise, default the graph to match.
       var defaultIdx = 0;
-      if (historyTableFilter !== "all") {
-        var found = combos.findIndex(function (c) { return comboKey(c) === historyTableFilter; });
-        if (found !== -1) defaultIdx = found;
+      if (historyTableFilter.indexOf("ex:") === 0) {
+        var foundEx = combos.findIndex(function (c) { return "ex:" + comboKey(c) === historyTableFilter; });
+        if (foundEx !== -1) defaultIdx = foundEx;
+      } else if (historyTableFilter.indexOf("bp:") === 0) {
+        var bpName = historyTableFilter.slice(3);
+        var foundBp = combos.findIndex(function (c) { return c.bp === bpName; });
+        if (foundBp !== -1) defaultIdx = foundBp;
       }
       select.value = defaultIdx;
       renderChartsFor(defaultIdx);
