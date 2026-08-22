@@ -235,7 +235,7 @@
   <header class="top">
     <div class="title-row">
       <h1>トレーニング記録表</h1>
-      <span class="version-badge">v1.4</span>
+      <span class="version-badge">v1.5</span>
     </div>
     <div class="data-actions">
       <button class="icon-btn" id="btnExport">バックアップ書き出し</button>
@@ -328,6 +328,7 @@
 
   var formState = { date: todayStr(), groups: [freshGroup()] };
   var editingRecordId = null; // id of the record currently shown as an editable row on the history page
+  var historyTableFilter = "all"; // "all" or "bodyPart||exercise" — which group the log table is narrowed to
 
   // ---------- Local persistence (auto-save on this device) ----------
   var STORAGE_KEY = "trainingLogData_v1";
@@ -873,11 +874,46 @@
     var tableCard = document.createElement("div");
     tableCard.className = "card";
     var tableHeading = document.createElement("div");
-    tableHeading.style.cssText = "font-size:15px;font-weight:700;margin-bottom:4px;";
+    tableHeading.style.cssText = "font-size:15px;font-weight:700;margin-bottom:10px;";
     tableHeading.textContent = "記録一覧";
     tableCard.appendChild(tableHeading);
 
+    // Build the full body-part -> exercise combo list once, used by both the
+    // table's narrow-down filter and the graph's exercise picker below.
+    var allCombos = [];
     orderedBodyParts().forEach(function (bp) {
+      orderedExercises(bp).forEach(function (exName) {
+        allCombos.push({ bp: bp, ex: exName });
+      });
+    });
+    function comboKey(c) { return c.bp + "||" + c.ex; }
+
+    if (historyTableFilter !== "all" && allCombos.every(function (c) { return comboKey(c) !== historyTableFilter; })) {
+      historyTableFilter = "all"; // selected exercise no longer exists (renamed/deleted) — fall back
+    }
+
+    var filterLabel = document.createElement("label");
+    filterLabel.className = "field-label";
+    filterLabel.textContent = "種目で絞り込む";
+    tableCard.appendChild(filterLabel);
+
+    var filterSelect = document.createElement("select");
+    filterSelect.className = "combo";
+    var allOpt = document.createElement("option");
+    allOpt.value = "all"; allOpt.textContent = "すべて表示";
+    filterSelect.appendChild(allOpt);
+    allCombos.forEach(function (c) {
+      var opt = document.createElement("option");
+      opt.value = comboKey(c);
+      opt.textContent = c.bp + " - " + c.ex;
+      filterSelect.appendChild(opt);
+    });
+    filterSelect.value = historyTableFilter;
+    filterSelect.onchange = function () { historyTableFilter = filterSelect.value; renderHistory(); };
+    tableCard.appendChild(filterSelect);
+
+    orderedBodyParts().forEach(function (bp) {
+      if (historyTableFilter !== "all" && orderedExercises(bp).every(function (ex) { return comboKey({ bp: bp, ex: ex }) !== historyTableFilter; })) return;
       var bpTitle = document.createElement("div");
       bpTitle.className = "bp-group-title group-title-row";
       var bpTitleText = document.createElement("span");
@@ -890,6 +926,8 @@
       tableCard.appendChild(bpTitle);
 
       orderedExercises(bp).forEach(function (exName) {
+        if (historyTableFilter !== "all" && historyTableFilter !== comboKey({ bp: bp, ex: exName })) return;
+
         var exTitle = document.createElement("div");
         exTitle.className = "ex-title group-title-row";
         var exTitleText = document.createElement("span");
@@ -938,12 +976,7 @@
 
     var select = document.createElement("select");
     select.className = "combo";
-    var combos = [];
-    orderedBodyParts().forEach(function (bp) {
-      orderedExercises(bp).forEach(function (exName) {
-        combos.push({ bp: bp, ex: exName });
-      });
-    });
+    var combos = allCombos;
     combos.forEach(function (c, i) {
       var opt = document.createElement("option");
       opt.value = i;
@@ -986,7 +1019,16 @@
     graphCard.appendChild(chartArea);
     el.appendChild(graphCard);
 
-    if (combos.length > 0) renderChartsFor(0);
+    if (combos.length > 0) {
+      // If the log table above is narrowed to one exercise, default the graph to match it.
+      var defaultIdx = 0;
+      if (historyTableFilter !== "all") {
+        var found = combos.findIndex(function (c) { return comboKey(c) === historyTableFilter; });
+        if (found !== -1) defaultIdx = found;
+      }
+      select.value = defaultIdx;
+      renderChartsFor(defaultIdx);
+    }
   }
 
   // ---------- Line chart (SVG) ----------
